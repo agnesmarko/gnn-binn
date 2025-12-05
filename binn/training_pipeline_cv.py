@@ -10,11 +10,6 @@ from torch_geometric.loader import DataLoader
 
 import wandb
 
-import warnings
-warnings.filterwarnings("ignore", message="The usage of `scatter(reduce='max')`.*")
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-
 from config.gnn_config import GNNConfig
 from config.binn_config import BinnConfig
 from config.gnn_binn_config import GNNBinnConfig
@@ -42,7 +37,7 @@ def aggregate_fold_results(fold_metrics_list):
     mean_metrics = df.mean().to_dict()
     std_metrics = df.std().to_dict()
     
-    # Rename keys for clarity
+    # rename keys for clarity
     summary = {}
     for key, value in mean_metrics.items():
         summary[f"{key}_mean"] = value
@@ -50,65 +45,6 @@ def aggregate_fold_results(fold_metrics_list):
         summary[f"{key}_std"] = value
         
     return summary
-
-
-def retrain_final_model(X_full, y_full, edge_index, num_nodes, input_features, binn_edge_index, input_dim, hidden_dims, output_dim,
-                        gnn_binn_config, binn_config, device, avg_best_epoch, pos_weight_full):
-    """Final retraining on full data for avg_best_epoch epochs (no val)."""
-    print("\n--- Final Retraining on Full Data ---")
-    print(f"Using average best epoch from CV: {avg_best_epoch}")
-    # set up wandb
-    setup_wandb(gnn_binn_config, binn_config, device)
-    
-    full_dataset = GNNProstateCancerDataset(X_full, y_full, edge_index, num_nodes, input_features)
-    full_loader = DataLoader(full_dataset, batch_size=gnn_binn_config.batch_size, shuffle=True)
-    
-    pos_w = pos_weight_full.to(device)
-    
-    # Initialize model
-    binn_model = create_binn(input_dim=input_dim, hidden_dims=hidden_dims, output_dim=output_dim, edge_index=binn_edge_index)
-    gnn_binn_model = GNN_BINN(
-        gnn_input_features=input_features,
-        gnn_hidden_dim=gnn_binn_config.hidden_dim,
-        gnn_output_features=input_features,
-        binn_model=binn_model,
-        num_nodes=num_nodes,
-        dropout_rate=gnn_binn_config.dropout_rate,
-        aggr_method=gnn_binn_config.aggregation_method
-    )
-    gnn_binn_model.to(device)
-    
-    optimizer = torch.optim.Adam(gnn_binn_model.parameters(), lr=gnn_binn_config.initial_lr, weight_decay=gnn_binn_config.weight_decay)
-    scheduler = CosineAnnealingLR(optimizer, T_max=avg_best_epoch, eta_min=gnn_binn_config.min_lr)  # Adjust T_max to avg_epoch
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_w)
-    
-    for epoch in range(avg_best_epoch):
-        print(f"Epoch {epoch + 1}/{avg_best_epoch}")
-        train_loss, train_metrics, gnn_binn_model, train_loader, criterion, optimizer, device, epoch = train_epoch(
-            gnn_binn_model, full_loader, criterion, optimizer, device, epoch
-        )
-        
-        # step the scheduler
-        scheduler.step()
-        current_lr = scheduler.get_last_lr()[0]
-
-       # log metrics to wandb
-        wandb.log({
-            "final/train/loss": train_loss,
-            "final/train/acc": train_metrics["accuracy"],
-            "final/train/precision": train_metrics["precision"],
-            "final/train/recall": train_metrics["recall"],
-            "final/train/f1": train_metrics["f1"],
-            "final/train/auc": train_metrics["auc"],
-            "final/train/auprc": train_metrics["auprc"],
-            "final/epoch": epoch + 1,
-            "final/lr": current_lr
-        })
-    
-    final_model_path = os.path.join(gnn_binn_config.model_save_path, f"{gnn_binn_config.model_name}_final.pth")
-    torch.save(gnn_binn_model.state_dict(), final_model_path)
-    print(f"Final model saved at {final_model_path} for interpretation.")
-
 
 
 def main():
@@ -123,10 +59,10 @@ def main():
 
     # create neural network
     input_dim, hidden_dims, output_dim, binn_edge_index, pathway_net = create_pathway_network(binn_config,
-                                                                    available_features_in_data=available_genes_in_data)
+                                                                                              available_features_in_data=available_genes_in_data)
 
 
-    # load/align FULL data (adapted from your create_aligned_dataloaders, but no splits)
+    # load/align full data (adapted from your create_aligned_dataloaders, but no splits)
     X_full, y_full, pos_weight_full, network_ordered_protein_ids = load_full_aligned_data(
         binn_config, pathway_net, data, features
     )
@@ -137,7 +73,7 @@ def main():
 
     # device setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    print(f"using device: {device}")
 
     # k-fold cross-validation
     all_fold_test_metrics = []
@@ -153,7 +89,7 @@ def main():
 
     for fold, (train_loader, val_loader, test_loader, pos_w) in enumerate(kfold_dataloaders):
         pos_w = pos_w.to(device)
-        print(f"\n--- Fold {fold + 1} / {binn_config.num_folds} ---")
+        print(f"\n--- fold {fold + 1} / {binn_config.num_folds} ---")
         # setup wandb for the current fold
         run = setup_wandb(binn_config, device,
                           group=wandb_group_name, job_type=f'fold_{fold+1}')
@@ -187,10 +123,10 @@ def main():
         best_recall = 0.0
         best_f1 = 0.0
         best_auprc = 0.0
-        best_epoch = 0  # Track per fold
+        best_epoch = 0  # track per fold
 
         for epoch in range(binn_config.num_epochs):
-            print(f"Epoch {epoch + 1}/{binn_config.num_epochs}")
+            print(f"epoch {epoch + 1}/{binn_config.num_epochs}")
 
             # training phase
             train_loss, train_metrics, binn_model, train_loader, criterion, optimizer, device, epoch = train_epoch(
@@ -246,16 +182,16 @@ def main():
                 torch.save(binn_model.state_dict(), best_model_path_fold)
 
         best_epochs.append(best_epoch)
-        print(f"Fold {fold + 1} training complete. Best epoch: {best_epoch}")
+        print(f"fold {fold + 1} training complete. best epoch: {best_epoch}")
 
         # print results for this fold (best val)
-        print("\n===== Best Val Model Evaluation =====")
-        print(f"Accuracy: {best_acc:.4f}")
-        print(f"Precision: {best_precision:.4f}")
-        print(f"Recall: {best_recall:.4f}")
-        print(f"F1 Score: {best_f1:.4f}")
-        print(f"AUC: {best_val_auc:.4f}")
-        print(f"AUPRC: {best_auprc:.4f}")
+        print("\n===== best val model evaluation =====")
+        print(f"accuracy: {best_acc:.4f}")
+        print(f"precision: {best_precision:.4f}")
+        print(f"recall: {best_recall:.4f}")
+        print(f"f1 score: {best_f1:.4f}")
+        print(f"auc: {best_val_auc:.4f}")
+        print(f"auprc: {best_auprc:.4f}")
 
         # evaluate the best model on the fold's test set
         binn_model.load_state_dict(torch.load(best_model_path_fold))
@@ -267,16 +203,16 @@ def main():
         )
 
         # print test metrics
-        print("\n===== Fold Test Set Evaluation =====")
-        print(f"Test Loss: {test_loss:.4f}")
-        print(f"Test Accuracy: {test_metrics['accuracy']:.4f}")
-        print(f"Test Precision: {test_metrics['precision']:.4f}")
-        print(f"Test Recall: {test_metrics['recall']:.4f}")
-        print(f"Test F1 Score: {test_metrics['f1']:.4f}")
-        print(f"Test AUC: {test_metrics['auc']:.4f}")
-        print(f"Test AUPRC: {test_metrics['auprc']:.4f}")
+        print("\n===== fold test set evaluation =====")
+        print(f"test loss: {test_loss:.4f}")
+        print(f"test accuracy: {test_metrics['accuracy']:.4f}")
+        print(f"test precision: {test_metrics['precision']:.4f}")
+        print(f"test recall: {test_metrics['recall']:.4f}")
+        print(f"test f1 score: {test_metrics['f1']:.4f}")
+        print(f"test auc: {test_metrics['auc']:.4f}")
+        print(f"test auprc: {test_metrics['auprc']:.4f}")
 
-        # log test results for THIS FOLD to wandb
+        # log test results for this fold to wandb
         wandb.log({f"fold_test/{k}": v for k, v in test_metrics.items()})
         all_fold_test_metrics.append(test_metrics)
         
@@ -287,10 +223,9 @@ def main():
     aggregated_results = aggregate_fold_results(all_fold_test_metrics)
 
     # print final aggregated results
-    print("\n===== Pure K-Fold Cross-Validation Results =====")
+    print("\n===== pure k-fold cross-validation results =====")
     for key, value in aggregated_results.items():
         print(f"{key}: {value:.4f}")
-
 
 
 if __name__ == "__main__":

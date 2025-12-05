@@ -25,7 +25,7 @@ class GNNConfig:
     num_epochs: int = 30
     initial_lr: float = 0.0002
     min_lr: float = 1e-5
-    weight_decay: float = 0.001 # 0.0005
+    weight_decay: float = 0.001 
     momentum: float = 0.85
 
     # warmup
@@ -36,7 +36,7 @@ class GNNConfig:
 
     loss_function: str = "bcelogits" # the model was tested with this loss function only
 
-    # Early stopping
+    # early stopping
     patience: int = 20
     min_delta: float = 0.0001
     mode: str = 'max'
@@ -46,7 +46,7 @@ class GNNConfig:
     wandb_project: str = "gnn"
 
     # Saving the model
-    model_save_path: str = "checkpoints/gnn"
+    model_save_path: str = "/home/markoa/workspace/checkpoints/gnn"
     model_name: str = "gnn_model.pth"
 
 

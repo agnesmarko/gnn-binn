@@ -65,8 +65,8 @@ def map_proteins_to_genes(
         json.dump(gene_nodes, f, indent=2)
     np.save(ggi_edges_output_path, np.array(indexed_ggi_edges))
 
-    print(f"Created {gene_nodes_output_path} with {len(gene_nodes)} unique genes.")
-    print(f"Created {ggi_edges_output_path} with {len(indexed_ggi_edges)} unique gene-gene interactions.")
+    print(f"created {gene_nodes_output_path} with {len(gene_nodes)} unique genes.")
+    print(f"created {ggi_edges_output_path} with {len(indexed_ggi_edges)} unique gene-gene interactions.")
 
     return unique_genes
 
@@ -121,5 +121,5 @@ def filter_and_order_genes(
         json.dump(final_ordered_nodes, f, indent=2)
     np.save(filtered_ordered_edges_path, np.array(final_edges))
 
-    print(f"Created {filtered_ordered_nodes_path} with {len(final_ordered_nodes)} filtered and ordered genes.")
-    print(f"Created {filtered_ordered_edges_path} with {len(final_edges)} filtered and ordered edges.")
+    print(f"created {filtered_ordered_nodes_path} with {len(final_ordered_nodes)} filtered and ordered genes.")
+    print(f"created {filtered_ordered_edges_path} with {len(final_edges)} filtered and ordered edges.")
